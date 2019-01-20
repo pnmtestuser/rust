@@ -349,10 +349,8 @@ impl NiceRegionError<'me, 'gcx, 'tcx> {
                 let mut printer = ty::print::FmtPrinter::new(f, Namespace::TypeNS);
                 printer.region_highlight_mode = self.highlight;
 
-                ty::print::PrintCx::with(self.tcx, printer, |cx| {
-                    self.value.print(cx)?;
-                    Ok(())
-                })
+                self.value.print(ty::print::PrintCx::new(self.tcx, printer))?;
+                Ok(())
             }
         }
 
