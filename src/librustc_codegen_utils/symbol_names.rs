@@ -293,10 +293,13 @@ fn compute_symbol_name<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, instance: Instance
         return tcx.item_name(def_id).to_string();
     }
 
-    compute_mangled_symbol_name(tcx, instance)
+    dump::record(tcx, instance)
 }
 
-fn compute_mangled_symbol_name(tcx: TyCtxt<'_, 'tcx, 'tcx>, instance: Instance<'tcx>) -> String {
+fn compute_old_mangled_symbol_name(
+    tcx: TyCtxt<'_, 'tcx, 'tcx>,
+    instance: Instance<'tcx>,
+) -> (String, u64) {
     let def_id = instance.def_id();
 
     // We want to compute the "type" of this item. Unfortunately, some
@@ -340,11 +343,7 @@ fn compute_mangled_symbol_name(tcx: TyCtxt<'_, 'tcx, 'tcx>, instance: Instance<'
         sanitize(&mut buf.temp_buf, "{{vtable-shim}}");
     }
 
-    let mangled_symbol = buf.finish(hash);
-
-    return dump::record(tcx, instance, &mangled_symbol, hash);
-
-    // mangled_symbol
+    (buf.finish(hash), hash)
 }
 
 // Follow C++ namespace-mangling style, see

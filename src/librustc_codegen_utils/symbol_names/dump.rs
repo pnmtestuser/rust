@@ -22,38 +22,15 @@ thread_local!(static OUT_DIR: Option<PathBuf> = {
 });
 thread_local!(static OUTPUT: RefCell<Option<File>> = RefCell::new(None));
 
-pub fn record(
-    tcx: TyCtxt<'_, 'tcx, 'tcx>,
-    instance: Instance<'tcx>,
-    old_mangling: &str,
-    old_hash: u64,
-) -> String {
+pub fn record(tcx: TyCtxt<'_, 'tcx, 'tcx>, instance: Instance<'tcx>) -> String {
     let header = "old+generics,old,mw,mw+compression,new,new+compression";
 
-    // Always compute all forms of mangling.
     let def_id = instance.def_id();
     // FIXME(eddyb) this should ideally not be needed.
     let substs =
         tcx.normalize_erasing_regions(ty::ParamEnv::reveal_all(), instance.substs);
 
-    let old_mangling_plus_generics = {
-        let mut symbol_path = old::SymbolPrinter {
-            tcx,
-            path: old::SymbolPath::new(),
-            keep_within_component: false,
-        }.print_def_path(def_id, substs).unwrap().path;
-
-        if instance.is_vtable_shim() {
-            symbol_path.finalize_pending_component();
-            old::sanitize(&mut symbol_path.temp_buf, "{{vtable-shim}}");
-        }
-
-        symbol_path.finish(old_hash)
-    };
-
-    let (mw_mangling, mw_mangling_plus_compression) = mw::mangle(tcx, instance)
-        .unwrap_or((String::new(), String::new()));
-    let (new_mangling, new_mangling_plus_compression) = new::mangle(tcx, instance);
+    let new_mangling_plus_compression = new::mangle(tcx, instance, true);
 
     OUTPUT.with(|out| {
         let mut out = out.borrow_mut();
@@ -93,6 +70,29 @@ pub fn record(
         }
 
         if let Some(out) = out.as_mut() {
+            let (old_mangling, old_hash) =
+                old::compute_old_mangled_symbol_name(tcx, instance);
+
+            let old_mangling_plus_generics = {
+                let mut symbol_path = old::SymbolPrinter {
+                    tcx,
+                    path: old::SymbolPath::new(),
+                    keep_within_component: false,
+                }.print_def_path(def_id, substs).unwrap().path;
+
+                if instance.is_vtable_shim() {
+                    symbol_path.finalize_pending_component();
+                    old::sanitize(&mut symbol_path.temp_buf, "{{vtable-shim}}");
+                }
+
+                symbol_path.finish(old_hash)
+            };
+
+            let (mw_mangling, mw_mangling_plus_compression) = mw::mangle(tcx, instance)
+                .unwrap_or((String::new(), String::new()));
+
+            let new_mangling = new::mangle(tcx, instance, false);
+
             writeln!(out, "{},{},{},{},{},{}",
                 old_mangling_plus_generics,
                 old_mangling,
@@ -124,17 +124,20 @@ pub fn record(
             cx.print_def_path(def_id, substs).unwrap().out
         }
     };
-    let expected_demangling_alt = make_expected_demangling(true);
+
+    // HACK(eddyb) some parts are commented out to reduce check overhead:
+
+    // let expected_demangling_alt = make_expected_demangling(true);
     let expected_demangling = make_expected_demangling(false);
 
-    for mangling in &[&new_mangling, &new_mangling_plus_compression] {
+    for mangling in &[/*&new_mangling,*/ &new_mangling_plus_compression] {
         match rustc_demangle::try_demangle(mangling) {
             Ok(demangling) => {
-                let demangling_alt = format!("{:#}", demangling);
+                /*let demangling_alt = format!("{:#}", demangling);
                 if demangling_alt.contains('?') {
                     bug!("demangle(alt) printing failed for {:?}\n{:?}", mangling, demangling_alt);
                 }
-                assert_eq!(demangling_alt, expected_demangling_alt);
+                assert_eq!(demangling_alt, expected_demangling_alt);*/
 
                 let demangling = format!("{}", demangling);
                 if demangling.contains('?') {

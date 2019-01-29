@@ -16,7 +16,8 @@ use std::ops::Range;
 pub(super) fn mangle(
     tcx: TyCtxt<'_, 'tcx, 'tcx>,
     instance: Instance<'tcx>,
-) -> (String, String) {
+    compress: bool,
+) -> String {
     let def_id = instance.def_id();
     // FIXME(eddyb) this should ideally not be needed.
     let substs =
@@ -41,27 +42,22 @@ pub(super) fn mangle(
 
     let prefix = "_R";
 
-    let uncompressed = print_symbol(SymbolMangler {
+    print_symbol(SymbolMangler {
         tcx,
-        compress: None,
+        compress: if compress {
+            Some(Box::new(CompressionCaches {
+                start_offset: prefix.len(),
+
+                paths: FxHashMap::default(),
+                types: FxHashMap::default(),
+                consts: FxHashMap::default(),
+            }))
+        } else {
+            None
+        },
         binders: vec![],
         out: String::from(prefix),
-    });
-
-    let compressed = print_symbol(SymbolMangler {
-        tcx,
-        compress: Some(Box::new(CompressionCaches {
-            start_offset: prefix.len(),
-
-            paths: FxHashMap::default(),
-            types: FxHashMap::default(),
-            consts: FxHashMap::default(),
-        })),
-        binders: vec![],
-        out: String::from(prefix),
-    });
-
-    (uncompressed, compressed)
+    })
 }
 
 struct CompressionCaches<'tcx> {
