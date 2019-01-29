@@ -4,13 +4,13 @@
 #  1. dump the symbols of a library using `nm`
 #  2. extract only those lines that we are interested in via `grep`
 #  3. from those lines, extract just the symbol name via `sed`
-#     (symbol names always start with "_ZN" and end with "E")
+#     (symbol names always start with "_R")
 #  4. sort those symbol names for deterministic comparison
 #  5. write the result into a file
 
 dump-symbols = nm "$(TMPDIR)/lib$(1).rlib" \
              | grep -E "$(2)" \
-             | sed "s/.*\(_ZN.*E\).*/\1/" \
+             | sed "s/.*\(_R[a-zA-Z0-9_]*\).*/\1/" \
              | sort \
              > "$(TMPDIR)/$(1)$(3).nm"
 
